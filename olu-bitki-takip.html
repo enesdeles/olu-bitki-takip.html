@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ölü Bitki Takip</title>
+
+<meta name="theme-color" content="#6a1b9a">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  margin: 0;
+  padding: 10px;
+}
+h1 {
+  text-align: center;
+  color: #6a1b9a;
+}
+button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 16px;
+  background: #6a1b9a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+}
+button.small { padding: 6px; font-size: 14px; }
+button.red { background: #c62828; }
+.section {
+  background: white;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+.hidden { display: none; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+th { background: #ede7f6; }
+select { width: 95%; padding: 6px; }
+#total {
+  margin-top: 15px;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+}
+
+@media print {
+  button, .section { display: none !important; }
+  select {
+    border: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  #total {
+    font-size: 20px;
+    border-top: 2px solid black;
+    padding-top: 10px;
+  }
+  @page { size: A4; margin: 15mm; }
+}
+</style>
+</head>
+
+<body>
+
+<h1>🌿 Ölü Bitki / Kesim Takibi</h1>
+
+<button class="small" onclick="togglePersonel()">👩‍🌾 Personel Yönetimi</button>
+
+<div class="section hidden" id="personelSection">
+  <input id="personelInput" placeholder="İsim Soyisim">
+  <button class="small" onclick="addPersonel()">Ekle</button>
+  <div id="personelList"></div>
+</div>
+
+<table id="takipTable">
+<tr>
+  <th>Tünel</th>
+  <th>Sıra</th>
+  <th>Personel</th>
+  <th>Kesilen Bitki</th>
+</tr>
+</table>
+
+<div id="total">Toplam Kesilen Bitki: 0</div>
+
+<button onclick="downloadPDF()">PDF İndir</button>
+<button class="red" onclick="clearPage()">🗑️ Sayfayı Temizle</button>
+
+<script>
+let personeller = JSON.parse(localStorage.getItem("ob_personeller")) || [];
+let kayitlar = JSON.parse(localStorage.getItem("ob_kayitlar")) || {};
+
+function togglePersonel() {
+  document.getElementById("personelSection").classList.toggle("hidden");
+}
+
+function savePersoneller() {
+  personeller.sort((a,b)=>a.localeCompare(b,"tr"));
+  localStorage.setItem("ob_personeller", JSON.stringify(personeller));
+}
+
+function renderPersonelList() {
+  const div = document.getElementById("personelList");
+  div.innerHTML = "";
+  personeller.forEach((p,i)=>{
+    div.innerHTML += `
+      <div style="display:flex;justify-content:space-between">
+        ${p}
+        <button class="small red" onclick="removePersonel(${i})">Sil</button>
+      </div>`;
+  });
+  updateAllPersonelSelects();
+}
+
+function addPersonel() {
+  const i=document.getElementById("personelInput");
+  if (!i.value.trim()) return;
+  personeller.push(i.value.trim());
+  i.value="";
+  savePersoneller();
+  renderPersonelList();
+}
+
+function removePersonel(i) {
+  personeller.splice(i,1);
+  savePersoneller();
+  renderPersonelList();
+}
+
+function personelSelect(id) {
+  let html=`<select onchange="saveValue('${id}','p',this.value)">`;
+  html+=`<option value="">Seç</option>`;
+  personeller.forEach(p=>html+=`<option>${p}</option>`);
+  html+=`</select>`;
+  return html;
+}
+
+function bitkiSelect(id) {
+  let html=`<select onchange="saveValue('${id}','b',this.value);calcTotal()">`;
+  for(let i=0;i<=500;i++) html+=`<option>${i}</option>`;
+  html+=`</select>`;
+  return html;
+}
+
+function saveValue(id,type,val) {
+  kayitlar[id]=kayitlar[id]||{};
+  kayitlar[id][type]=val;
+  localStorage.setItem("ob_kayitlar",JSON.stringify(kayitlar));
+}
+
+function restoreValue(id,type) {
+  return kayitlar[id]?.[type] || "";
+}
+
+const table=document.getElementById("takipTable");
+for(let t=19;t>=1;t--){
+  for(let s=1;s<=6;s++){
+    const id=`${t}-${s}`;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${t}</td>
+      <td>${s}</td>
+      <td>${personelSelect(id)}</td>
+      <td>${bitkiSelect(id)}</td>`;
+    table.appendChild(tr);
+
+    tr.querySelector("td:nth-child(3) select").value=restoreValue(id,"p");
+    tr.querySelector("td:nth-child(4) select").value=restoreValue(id,"b");
+  }
+}
+
+function updateAllPersonelSelects(){
+  document.querySelectorAll("td:nth-child(3) select").forEach(s=>{
+    const val=s.value;
+    s.innerHTML=`<option value="">Seç</option>`+
+      personeller.map(p=>`<option>${p}</option>`).join("");
+    s.value=val;
+  });
+}
+
+function calcTotal(){
+  let total=0;
+  document.querySelectorAll("td:nth-child(4) select")
+    .forEach(s=>total+=Number(s.value));
+  document.getElementById("total").innerText="Toplam Kesilen Bitki: "+total;
+}
+
+function clearPage(){
+  if(!confirm("Tüm kayıtlar silinsin mi?")) return;
+  kayitlar={};
+  localStorage.removeItem("ob_kayitlar");
+  document.querySelectorAll("select").forEach(s=>s.value="");
+  calcTotal();
+}
+
+function downloadPDF(){ window.print(); }
+
+renderPersonelList();
+calcTotal();
+</script>
+
+</body>
+</html>
